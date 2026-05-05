@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ChainLedger — Decentralized Expense Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+<style>
+  /* ─── Reset & Base ──────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #030712; color: #f9fafb; font-family: 'Outfit', sans-serif; overflow-x: hidden; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #111827; }
+  ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  input[type=number] { -moz-appearance: textfield; }
+
+  /* ─── Animations ────────────────────────────────────── */
+  @keyframes slideDown  { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes blockPop   { 0%{transform:scale(1)} 50%{transform:scale(1.03);box-shadow:0 0 40px rgba(34,211,238,.3)} 100%{transform:scale(1)} }
+  @keyframes float      { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+  @keyframes fadeIn     { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes spin       { to { transform: rotate(360deg); } }
+  @keyframes pulse      { 0%,100%{opacity:1} 50%{opacity:.5} }
+  @keyframes glow       { 0%,100%{box-shadow:0 0 6px #10b981} 50%{box-shadow:0 0 14px #10b981} }
+
+  /* ─── Layout ────────────────────────────────────────── */
+  .grid-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(34,211,238,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,211,238,.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* ─── Toast ─────────────────────────────────────────── */
+  #toast {
+    position: fixed; top: 20px; right: 20px; z-index: 9999;
+    padding: 12px 20px; border-radius: 10px; color: #fff;
+    font-weight: 500; font-size: 14px;
+    animation: slideDown .3s ease;
+    box-shadow: 0 8px 32px rgba(0,0,0,.4);
+    display: none; max-width: 340px;
+  }
+  #toast.success { background: #10b981; }
+  #toast.error   { background: #ef4444; }
+
+  /* ─── Header ────────────────────────────────────────── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 32px;
+    background: rgba(3,7,18,.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(55,65,81,.5);
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: linear-gradient(135deg, #22d3ee, #6366f1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 700;
+  }
+  .logo-title { font-family:'Space Mono',monospace; font-size:18px; font-weight:700; }
+  .logo-sub   { font-size:11px; color:#6b7280; }
+  .header-right { display:flex; align-items:center; gap:12px; }
+  .network-badge {
+    display:flex; align-items:center; gap:6px;
+    font-size:12px; color:#9ca3af;
+    background:#111827; border:1px solid #1f2937;
+    padding:6px 12px; border-radius:8px;
+    font-family:'Space Mono',monospace;
+  }
+  .dot {
+    width:7px; height:7px; border-radius:50%;
+    background:#10b981; animation: glow 2s ease-in-out infinite;
+  }
+  .btn {
+    border:none; cursor:pointer; border-radius:8px;
+    font-family:'Outfit',sans-serif; font-weight:600;
+    font-size:13px; padding:8px 16px; transition:all .2s;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg,#22d3ee,#6366f1);
+    color:#fff; box-shadow:0 4px 15px rgba(34,211,238,.25);
+  }
+  .btn-outline {
+    background:transparent; color:#22d3ee;
+    border:1px solid rgba(34,211,238,.3);
+  }
+  .btn:disabled { opacity:.6; cursor:not-allowed; }
+
+  /* ─── Hero ──────────────────────────────────────────── */
+  #hero {
+    position:relative; z-index:1;
+    display:flex; flex-direction:column; align-items:center;
+    padding:80px 24px 60px; text-align:center;
+  }
+  .hero-glow {
+    position:absolute; top:-60px; left:50%;
+    transform:translateX(-50%);
+    width:500px; height:300px;
+    background:radial-gradient(ellipse,rgba(34,211,238,.12) 0%,transparent 70%);
+    pointer-events:none;
+  }
+  .hero-badge {
+    font-size:11px; letter-spacing:2px; text-transform:uppercase;
+    color:#22d3ee; background:rgba(34,211,238,.08);
+    border:1px solid rgba(34,211,238,.2);
+    padding:6px 14px; border-radius:20px; margin-bottom:24px;
+  }
+  .hero-title { font-size:clamp(36px,6vw,64px); font-weight:700; line-height:1.1; margin-bottom:20px; }
+  .hero-grad  {
+    background:linear-gradient(135deg,#22d3ee,#a78bfa);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .hero-desc  { font-size:16px; color:#9ca3af; max-width:520px; line-height:1.7; margin-bottom:48px; }
+  .hero-blocks { display:flex; align-items:center; gap:0; margin-bottom:48px; flex-wrap:wrap; justify-content:center; }
+  .hero-block {
+    position:relative;
+    background:#0f172a; border:1px solid #1e3a4a;
+    border-radius:10px; padding:12px 16px; text-align:center;
+    animation: float 3s ease-in-out infinite; min-width:110px;
+  }
+  .hero-block-hash  { font-family:'Space Mono',monospace; font-size:9px; color:#22d3ee; margin-bottom:4px; }
+  .hero-block-label { font-size:11px; color:#6b7280; }
+  .hero-block-arrow { color:#374151; font-size:20px; padding:0 4px; margin-top:-8px; }
+  .hero-btn {
+    background:linear-gradient(135deg,#22d3ee,#6366f1);
+    border:none; color:#fff; font-family:'Outfit',sans-serif;
+    font-weight:700; font-size:16px; padding:16px 40px;
+    border-radius:12px; cursor:pointer;
+    box-shadow:0 8px 30px rgba(34,211,238,.3);
+    transition: transform .2s;
+  }
+  .hero-btn:hover { transform: translateY(-2px); }
+
+  /* ─── Main Dashboard ─────────────────────────────────── */
+  #dashboard { display:none; position:relative; z-index:1; max-width:900px; margin:0 auto; padding:32px 16px 80px; }
+  .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; }
+  .stat-card {
+    background:#0f172a; border:1px solid #1f2937;
+    border-radius:12px; padding:20px 16px; text-align:center;
+  }
+  .stat-icon  { font-size:22px; margin-bottom:8px; }
+  .stat-value { font-size:22px; font-weight:700; font-family:'Space Mono',monospace; margin-bottom:4px; }
+  .stat-label { font-size:11px; color:#6b7280; text-transform:uppercase; letter-spacing:1px; }
+
+  /* ─── Tabs ───────────────────────────────────────────── */
+  .tabs { display:flex; gap:4px; margin-bottom:16px; background:#0f172a; padding:4px; border-radius:10px; }
+  .tab {
+    flex:1; border:none; cursor:pointer;
+    padding:10px; border-radius:8px; font-size:13px; font-weight:500;
+    font-family:'Outfit',sans-serif;
+    background:transparent; color:#6b7280; transition:all .2s;
+  }
+  .tab.active { background:#1f2937; color:#f9fafb; }
+
+  /* ─── Card ───────────────────────────────────────────── */
+  .card {
+    background:#0d1117; border:1px solid #1f2937;
+    border-radius:16px; padding:28px;
+    animation: fadeIn .3s ease;
+  }
+  .card-title { font-size:20px; font-weight:700; margin-bottom:4px; }
+  .card-sub   { font-size:13px; color:#6b7280; margin-bottom:24px; }
+
+  /* ─── Form ───────────────────────────────────────────── */
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; }
+  .field { display:flex; flex-direction:column; gap:6px; }
+  .field.full { grid-column: 1 / -1; }
+  label.lbl { font-size:12px; font-weight:500; color:#9ca3af; text-transform:uppercase; letter-spacing:.8px; }
+  input.inp, select.inp {
+    background:#161b22; border:1px solid #30363d;
+    color:#f9fafb; border-radius:8px; padding:10px 12px;
+    font-size:14px; font-family:'Outfit',sans-serif;
+    outline:none; width:100%;
+    transition: border-color .2s;
+  }
+  input.inp:focus, select.inp:focus { border-color: rgba(34,211,238,.5); }
+  select.inp option { background:#161b22; }
+
+  /* ─── Block Preview ──────────────────────────────────── */
+  .block-preview {
+    background:#0a0f1a; border:1px solid #1e3a4a;
+    border-radius:12px; margin-bottom:16px; overflow:hidden;
+    transition:all .3s;
+  }
+  .block-preview.anim { animation: blockPop .8s ease; }
+  .block-header {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 16px; background:rgba(34,211,238,.05);
+    border-bottom:1px solid #1e3a4a;
+  }
+  .block-label { font-size:11px; color:#22d3ee; text-transform:uppercase; letter-spacing:1px; font-family:'Space Mono',monospace; }
+  .block-body  { padding:14px 16px; display:flex; flex-direction:column; gap:6px; }
+  .block-field { display:flex; justify-content:space-between; font-size:12px; }
+  .block-key   { color:#6b7280; font-family:'Space Mono',monospace; }
+  .block-val   { color:#e5e7eb; font-weight:500; }
+  .hash-badge  { font-family:monospace; font-size:10px; color:#22d3ee; background:rgba(34,211,238,.08); padding:2px 6px; border-radius:4px; letter-spacing:1px; }
+
+  /* ─── Submit btn ─────────────────────────────────────── */
+  .submit-btn {
+    width:100%; padding:14px; font-size:15px;
+    margin-top:8px; border-radius:10px;
+    background:linear-gradient(135deg,#22d3ee,#6366f1);
+    color:#fff; font-family:'Outfit',sans-serif; font-weight:700;
+    border:none; cursor:pointer;
+    box-shadow:0 4px 20px rgba(34,211,238,.25);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .submit-btn:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 6px 28px rgba(34,211,238,.35); }
+  .submit-btn:disabled { opacity:.6; cursor:not-allowed; }
+  .tx-box {
+    margin-top:12px; padding:10px 14px;
+    background:rgba(34,211,238,.05); border:1px solid rgba(34,211,238,.1);
+    border-radius:8px; font-size:12px; word-break:break-all;
+  }
+
+  /* ─── History ────────────────────────────────────────── */
+  .expense-list { display:flex; flex-direction:column; gap:8px; }
+  .expense-row {
+    display:flex; align-items:center; gap:14px;
+    padding:14px 16px; background:#0f172a;
+    border:1px solid #1f2937; border-radius:10px;
+    transition: border-color .2s;
+  }
+  .expense-row:hover { border-color: rgba(34,211,238,.2); }
+  .expense-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .expense-info { flex:1; min-width:0; }
+  .expense-desc { font-size:14px; font-weight:500; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .expense-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .cat-tag      { font-size:10px; padding:2px 8px; border-radius:12px; font-weight:600; }
+  .expense-amt  { font-size:16px; font-weight:700; font-family:'Space Mono',monospace; color:#22d3ee; white-space:nowrap; }
+  .delete-btn   { background:transparent; border:none; cursor:pointer; font-size:16px; padding:4px; opacity:.5; transition:opacity .2s; }
+  .delete-btn:hover { opacity:1; }
+  .empty        { text-align:center; padding:60px 0; color:#4b5563; display:flex; flex-direction:column; gap:12px; align-items:center; }
+  .empty .empty-icon { font-size:48px; }
+
+  /* ─── Analytics ──────────────────────────────────────── */
+  .cat-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:24px; }
+  .cat-card { background:#0f172a; border:1px solid #1f2937; border-radius:12px; padding:16px; }
+  .cat-card-top { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .cat-icon     { width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; }
+  .cat-name     { flex:1; font-size:13px; font-weight:600; }
+  .cat-pct      { font-size:13px; font-weight:700; font-family:'Space Mono',monospace; }
+  .cat-amt      { font-size:18px; font-weight:700; font-family:'Space Mono',monospace; margin-bottom:8px; color:#e5e7eb; }
+  .cat-bar      { height:4px; background:#1f2937; border-radius:2px; }
+  .cat-bar-fill { height:100%; border-radius:2px; transition:width .8s ease; }
+
+  /* ─── Chain Viz ──────────────────────────────────────── */
+  .chain-viz {
+    margin-top:24px; padding:20px 24px;
+    background:#0d1117; border:1px solid #1f2937;
+    border-radius:16px;
+  }
+  .chain-title  { font-size:12px; color:#6b7280; text-transform:uppercase; letter-spacing:1px; margin-bottom:14px; font-family:'Space Mono',monospace; }
+  .chain-blocks { display:flex; align-items:center; gap:4px; overflow-x:auto; padding-bottom:4px; }
+  .chain-block  {
+    background:#0f172a; border:1px solid #1e3a4a;
+    border-radius:8px; padding:8px 12px; text-align:center; flex-shrink:0;
+  }
+  .chain-block-hash  { font-family:'Space Mono',monospace; font-size:9px; color:#22d3ee; margin-bottom:2px; }
+  .chain-block-label { font-size:10px; color:#6b7280; }
+  .chain-arrow  { color:#374151; font-size:16px; flex-shrink:0; }
+
+  /* ─── SVG Chart ──────────────────────────────────────── */
+  #chart-container { width:100%; margin:24px 0; }
+
+  /* ─── Footer ─────────────────────────────────────────── */
+  footer {
+    position:relative; z-index:1; text-align:center;
+    padding:24px; font-size:12px;
+    border-top:1px solid #111827;
+  }
+
+  /* ─── Loading spinner ────────────────────────────────── */
+  .spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:6px; }
+
+  /* ─── Responsive ─────────────────────────────────────── */
+  @media (max-width: 600px) {
+    header { padding:12px 16px; }
+    .logo-title { font-size:15px; }
+    .stats-row { grid-template-columns:repeat(2,1fr); }
+    .form-grid { grid-template-columns:1fr; }
+    .cat-grid  { grid-template-columns:1fr; }
+    #hero { padding:60px 16px 40px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⟠</div>
+    <div>
+      <div class="logo-title">ChainLedger</div>
+      <div class="logo-sub">Decentralized Expense Tracker</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div id="network-badge" class="network-badge" style="display:none">
+      <span class="dot"></span>
+      <span id="net-text">Demo Net</span>
+    </div>
+    <button id="connect-btn" class="btn btn-primary" onclick="handleConnect()">Connect Wallet</button>
+  </div>
+</header>
+
+<!-- Hero -->
+<section id="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-badge">Powered by Ethereum · Immutable · Transparent</div>
+  <h1 class="hero-title">Your Expenses.<br><span class="hero-grad">On-Chain. Forever.</span></h1>
+  <p class="hero-desc">Every expense you record becomes an immutable block on the Ethereum blockchain. No servers. No databases. Just cryptographic truth.</p>
+  <div class="hero-blocks" id="hero-blocks"></div>
+  <button class="hero-btn" onclick="handleConnect()">Launch DApp →</button>
+</section>
+
+<!-- Dashboard -->
+<main id="dashboard">
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon" style="color:#22d3ee">💰</div>
+      <div class="stat-value" id="stat-total" style="color:#22d3ee">₹0</div>
+      <div class="stat-label">Total Spent</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="color:#a78bfa">📦</div>
+      <div class="stat-value" id="stat-txns" style="color:#a78bfa">0</div>
+      <div class="stat-label">Transactions</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="color:#34d399">🏷️</div>
+      <div class="stat-value" id="stat-cats" style="color:#34d399">0</div>
+      <div class="stat-label">Categories</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="color:#f59e0b">⟠</div>
+      <div class="stat-value" style="color:#f59e0b">Demo</div>
+      <div class="stat-label">Network</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('add',this)">➕ Add Expense</button>
+    <button class="tab" onclick="switchTab('history',this)">📜 History</button>
+    <button class="tab" onclick="switchTab('analytics',this)">📊 Analytics</button>
+  </div>
+
+  <!-- Add Tab -->
+  <div id="tab-add" class="card">
+    <h2 class="card-title">Record New Expense</h2>
+    <p class="card-sub">This transaction will be written to the Ethereum blockchain</p>
+
+    <div class="form-grid">
+      <div class="field">
+        <label class="lbl">Amount (₹)</label>
+        <input class="inp" id="inp-amount" type="number" placeholder="0.00" min="1" oninput="updateBlockPreview()" />
+      </div>
+      <div class="field">
+        <label class="lbl">Category</label>
+        <select class="inp" id="inp-category" onchange="updateBlockPreview()">
+          <option>🍜 Food</option>
+          <option>🚇 Transport</option>
+          <option>🛍️ Shopping</option>
+          <option>🏠 Housing</option>
+          <option>💊 Health</option>
+          <option>📚 Education</option>
+          <option>✈️ Travel</option>
+          <option>📦 Other</option>
+        </select>
+      </div>
+      <div class="field full">
+        <label class="lbl">Description</label>
+        <input class="inp" id="inp-desc" type="text" placeholder="What did you spend on?" oninput="updateBlockPreview()" />
+      </div>
+    </div>
+
+    <!-- Block preview -->
+    <div class="block-preview" id="block-preview">
+      <div class="block-header">
+        <span class="block-label">⬡ Pending Block</span>
+        <span class="hash-badge" id="preview-hash">#pending</span>
+      </div>
+      <div class="block-body">
+        <div class="block-field"><span class="block-key">amount:</span>    <span class="block-val" id="pv-amount">—</span></div>
+        <div class="block-field"><span class="block-key">category:</span>  <span class="block-val" id="pv-cat">—</span></div>
+        <div class="block-field"><span class="block-key">description:</span><span class="block-val" id="pv-desc">—</span></div>
+        <div class="block-field"><span class="block-key">timestamp:</span> <span class="block-val" id="pv-ts">—</span></div>
+        <div class="block-field"><span class="block-key">owner:</span>     <span class="block-val" id="pv-owner">—</span></div>
+      </div>
+    </div>
+
+    <button class="submit-btn" id="submit-btn" onclick="handleAdd()">⟠ Sign &amp; Submit to Blockchain</button>
+    <div class="tx-box" id="tx-box" style="display:none">
+      <span style="color:#9ca3af">Last TX Hash:</span>
+      <span style="color:#22d3ee;font-family:monospace;font-size:12px" id="tx-hash-display"></span>
+    </div>
+  </div>
+
+  <!-- History Tab -->
+  <div id="tab-history" class="card" style="display:none">
+    <h2 class="card-title">Transaction History</h2>
+    <p class="card-sub" id="history-sub">0 immutable blocks on-chain</p>
+    <div id="expense-list" class="expense-list"></div>
+  </div>
+
+  <!-- Analytics Tab -->
+  <div id="tab-analytics" class="card" style="display:none">
+    <h2 class="card-title">Spending Analytics</h2>
+    <p class="card-sub">Derived from immutable on-chain data</p>
+    <div id="chart-container"></div>
+    <div id="cat-grid" class="cat-grid"></div>
+  </div>
+
+  <!-- Chain Viz -->
+  <div class="chain-viz">
+    <div class="chain-title">⛓ Live Blockchain State</div>
+    <div class="chain-blocks" id="chain-blocks">
+      <div class="chain-block">
+        <div class="chain-block-hash">0x000000</div>
+        <div class="chain-block-label">Genesis</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Footer -->
+<footer>
+  <span style="color:#4b5563">ChainLedger</span>
+  <span style="color:#374151;margin:0 12px">·</span>
+  <span style="color:#374151">Built on Ethereum · Smart Contract · Immutable Records</span>
+  <span style="color:#374151;margin:0 12px">·</span>
+  <span style="color:#22d3ee;font-family:monospace;font-size:11px">0xMockChain…DEMO</span>
+</footer>
+
+<script>
+// ─── Category Config ──────────────────────────────────────
+const CATEGORIES = [
+  { name:"Food",      icon:"🍜", color:"#FF6B6B" },
+  { name:"Transport", icon:"🚇", color:"#4ECDC4" },
+  { name:"Shopping",  icon:"🛍️", color:"#FFE66D" },
+  { name:"Housing",   icon:"🏠", color:"#A8E6CF" },
+  { name:"Health",    icon:"💊", color:"#FF8B94" },
+  { name:"Education", icon:"📚", color:"#A0C4FF" },
+  { name:"Travel",    icon:"✈️",  color:"#BDB2FF" },
+  { name:"Other",     icon:"📦", color:"#FFC6FF" },
+];
+const getCat = (name) => CATEGORIES.find(c=>c.name===name) || { icon:"📦", color:"#888" };
+
+// ─── Helpers ──────────────────────────────────────────────
+const shortenAddr = (a) => a ? `${a.slice(0,6)}…${a.slice(-4)}` : "";
+const formatAmt   = (n)  => isNaN(Number(n)) ? "0" : Number(n).toLocaleString("en-IN");
+const fmtDate     = (ts) => {
+  const d = new Date(Number(ts)*1000);
+  return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});
+};
+const randHex = (len=16) => [...Array(len)].map(()=>Math.floor(Math.random()*16).toString(16)).join('');
+
+// ─── Mock Smart Contract (simulates ExpenseTracker.sol) ───
+class MockChain {
+  constructor() {
+    this._expenses = [];
+    this._counter  = 0;
+    this._account  = "0xDem0" + randHex(6).toUpperCase() + "DEAD";
+  }
+  async addExpense(amount, category, description) {
+    if (amount <= 0)      throw new Error("Amount must be greater than zero");
+    if (!category)        throw new Error("Category cannot be empty");
+    if (!description)     throw new Error("Description cannot be empty");
+    await this._delay(600);
+    this._counter++;
+    const expense = {
+      id:          this._counter,
+      amount:      Number(amount),
+      category,
+      description,
+      timestamp:   Math.floor(Date.now()/1000),
+      owner:       this._account,
+    };
+    this._expenses.push(expense);
+    return { hash: "0x" + randHex(64) };
+  }
+  async deleteExpense(id) {
+    await this._delay(400);
+    const idx = this._expenses.findIndex(e => e.id === id);
+    if (idx === -1) throw new Error("Expense not found");
+    if (this._expenses[idx].owner !== this._account) throw new Error("Not your expense");
+    this._expenses.splice(idx, 1);
+  }
+  async getMyExpenses() {
+    await this._delay(200);
+    return [...this._expenses].filter(e=>e.owner===this._account).reverse();
+  }
+  async getMyTotal() {
+    return this._expenses.filter(e=>e.owner===this._account).reduce((s,e)=>s+Number(e.amount),0);
+  }
+  _delay(ms) { return new Promise(r=>setTimeout(r,ms)); }
+}
+
+// ─── App State ────────────────────────────────────────────
+let chain    = new MockChain();
+let wallet   = null;
+let expenses = [];
+let total    = 0;
+let loading  = false;
+
+// ─── Toast ────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type="success") {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className   = type;
+  el.style.display = "block";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.display="none"; }, 3500);
+}
+
+// ─── Connect ──────────────────────────────────────────────
+async function handleConnect() {
+  if (wallet) return;
+  setLoading(true);
+  await chain._delay(400);
+
+  // Try real MetaMask first
+  if (typeof window.ethereum !== "undefined") {
+    try {
+      const accounts = await window.ethereum.request({ method:"eth_requestAccounts" });
+      const chainId  = await window.ethereum.request({ method:"eth_chainId" });
+      chain._account = accounts[0];
+      wallet = { account: accounts[0], chainId, isMock: false };
+      showToast("✅ MetaMask connected! Using live wallet.");
+      document.getElementById("net-text").textContent = "Mainnet · " + shortenAddr(accounts[0]);
+    } catch(e) {
+      wallet = { account: chain._account, chainId: "0xdemo", isMock: true };
+      showToast("🎭 Demo mode active — MetaMask not found or denied");
+    }
+  } else {
+    wallet = { account: chain._account, chainId: "0xdemo", isMock: true };
+    showToast("🎭 Demo mode active — no MetaMask detected");
+  }
+
+  // Update UI
+  document.getElementById("network-badge").style.display = "flex";
+  if (!wallet.isMock) {
+    document.getElementById("net-text").textContent = "ETH Mainnet · " + shortenAddr(wallet.account);
+  }
+  document.getElementById("connect-btn").textContent = "🔗 Connected";
+  document.getElementById("connect-btn").classList.replace("btn-primary","btn-outline");
+  document.getElementById("connect-btn").disabled = true;
+
+  document.getElementById("hero").style.display = "none";
+  document.getElementById("dashboard").style.display = "block";
+
+  document.getElementById("pv-owner").textContent = shortenAddr(wallet.account);
+
+  buildHeroBlocks(); // pre-populate animated blocks
+
+  setLoading(false);
+  await loadExpenses();
+}
+
+// ─── Load / Refresh ───────────────────────────────────────
+async function loadExpenses() {
+  expenses = await chain.getMyExpenses();
+  total    = await chain.getMyTotal();
+  renderAll();
+}
+
+// ─── Add Expense ──────────────────────────────────────────
+async function handleAdd() {
+  const amt  = document.getElementById("inp-amount").value;
+  const cat  = document.getElementById("inp-category").value.replace(/^[^\s]+\s/,""); // strip emoji
+  const desc = document.getElementById("inp-desc").value.trim();
+
+  if (!amt || !desc) { showToast("All fields are required","error"); return; }
+  if (isNaN(Number(amt)) || Number(amt) <= 0) { showToast("Enter a valid positive amount","error"); return; }
+
+  setLoading(true);
+  try {
+    const tx = await chain.addExpense(Number(amt), cat, desc);
+
+    // Block pop animation
+    const bp = document.getElementById("block-preview");
+    bp.classList.add("anim");
+    setTimeout(()=>bp.classList.remove("anim"), 900);
+
+    document.getElementById("tx-box").style.display = "block";
+    document.getElementById("tx-hash-display").textContent = tx.hash;
+
+    showToast("✅ Block mined! TX: " + tx.hash.slice(0,14) + "…");
+
+    // Reset form
+    document.getElementById("inp-amount").value = "";
+    document.getElementById("inp-desc").value   = "";
+    updateBlockPreview();
+
+    await loadExpenses();
+    switchTab("history", document.querySelectorAll(".tab")[1]);
+  } catch(e) {
+    showToast("Transaction failed: " + e.message, "error");
+  }
+  setLoading(false);
+}
+
+// ─── Delete Expense ───────────────────────────────────────
+async function handleDelete(id) {
+  if (!confirm("Delete this expense from the chain?")) return;
+  setLoading(true);
+  try {
+    await chain.deleteExpense(id);
+    showToast("🗑️ Expense deleted from chain");
+    await loadExpenses();
+  } catch(e) {
+    showToast("Delete failed: " + e.message, "error");
+  }
+  setLoading(false);
+}
+
+// ─── Render All ───────────────────────────────────────────
+function renderAll() {
+  // Stats
+  document.getElementById("stat-total").textContent = "₹" + formatAmt(total);
+  document.getElementById("stat-txns").textContent  = expenses.length;
+  const cats = [...new Set(expenses.map(e=>e.category))];
+  document.getElementById("stat-cats").textContent  = cats.length;
+
+  renderHistory();
+  renderAnalytics();
+  renderChain();
+}
+
+function renderHistory() {
+  const list = document.getElementById("expense-list");
+  document.getElementById("history-sub").textContent = expenses.length + " immutable blocks on-chain";
+
+  if (!expenses.length) {
+    list.innerHTML = `<div class="empty"><div class="empty-icon">⛓</div><div>No expenses recorded yet. Add your first block!</div></div>`;
+    return;
+  }
+
+  list.innerHTML = expenses.map(e => {
+    const meta = getCat(e.category);
+    return `
+    <div class="expense-row">
+      <div class="expense-icon" style="background:${meta.color}22;color:${meta.color}">${meta.icon}</div>
+      <div class="expense-info">
+        <div class="expense-desc">${escHtml(e.description)}</div>
+        <div class="expense-meta">
+          <span class="cat-tag" style="background:${meta.color}22;color:${meta.color}">${e.category}</span>
+          <span style="color:#6b7280;font-size:11px">${fmtDate(e.timestamp)}</span>
+          <span class="hash-badge">#${e.id.toString(16).padStart(4,'0')}…</span>
+        </div>
+      </div>
+      <div class="expense-amt">₹${formatAmt(e.amount)}</div>
+      <button class="delete-btn" onclick="handleDelete(${e.id})" title="Delete">🗑️</button>
+    </div>`;
+  }).join("");
+}
+
+function renderAnalytics() {
+  const catGrid = document.getElementById("cat-grid");
+  const chartEl = document.getElementById("chart-container");
+
+  if (!expenses.length) {
+    catGrid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📊</div><div>No data yet</div></div>`;
+    chartEl.innerHTML = "";
+    return;
+  }
+
+  // Category totals
+  const totals = {};
+  expenses.forEach(e => { totals[e.category] = (totals[e.category]||0) + Number(e.amount); });
+  const sorted = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+
+  // SVG Bar Chart
+  const W=480, H=160, PAD=40, barW=48;
+  const top6 = sorted.slice(0,6);
+  const maxV  = Math.max(...top6.map(([,v])=>v));
+  const gap   = (W - PAD*2 - barW*top6.length) / (top6.length+1);
+
+  const bars = top6.map(([cat,amt],i) => {
+    const meta = getCat(cat);
+    const barH = maxV>0 ? (amt/maxV)*H : 0;
+    const x = PAD + gap*(i+1) + barW*i;
+    const y = PAD + H - barH;
+    return `
+      <g>
+        <rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="6" fill="${meta.color}" opacity="0.9"/>
+        <text x="${x+barW/2}" y="${y-6}" text-anchor="middle" font-size="10" fill="#9ca3af">₹${formatAmt(amt)}</text>
+        <text x="${x+barW/2}" y="${H+PAD+16}" text-anchor="middle" font-size="12">${meta.icon}</text>
+        <text x="${x+barW/2}" y="${H+PAD+30}" text-anchor="middle" font-size="9" fill="#6b7280">${cat}</text>
+      </g>`;
+  }).join("");
+
+  chartEl.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H+60}" style="width:100%;overflow:visible" xmlns="http://www.w3.org/2000/svg">
+      ${bars}
+      <line x1="${PAD}" y1="${PAD}" x2="${PAD}" y2="${PAD+H}" stroke="#374151" stroke-width="1"/>
+      <line x1="${PAD}" y1="${PAD+H}" x2="${W-PAD}" y2="${PAD+H}" stroke="#374151" stroke-width="1"/>
+    </svg>`;
+
+  // Category cards
+  catGrid.innerHTML = sorted.map(([cat,amt]) => {
+    const meta = getCat(cat);
+    const pct  = total>0 ? ((amt/total)*100).toFixed(1) : 0;
+    return `
+    <div class="cat-card">
+      <div class="cat-card-top">
+        <span class="cat-icon" style="background:${meta.color}22">${meta.icon}</span>
+        <span class="cat-name">${cat}</span>
+        <span class="cat-pct" style="color:${meta.color}">${pct}%</span>
+      </div>
+      <div class="cat-amt">₹${formatAmt(amt)}</div>
+      <div class="cat-bar"><div class="cat-bar-fill" style="width:${pct}%;background:${meta.color}"></div></div>
+    </div>`;
+  }).join("");
+}
+
+function renderChain() {
+  const container = document.getElementById("chain-blocks");
+  let html = `<div class="chain-block"><div class="chain-block-hash">0x000000</div><div class="chain-block-label">Genesis</div></div>`;
+
+  const show = expenses.slice(-4).reverse(); // last 4
+  show.forEach((e,i) => {
+    html += `
+      <div class="chain-arrow">→</div>
+      <div class="chain-block">
+        <div class="chain-block-hash">0x${e.id.toString(16).padStart(6,'0')}</div>
+        <div class="chain-block-label">#${e.id} · ₹${formatAmt(e.amount)}</div>
+      </div>`;
+  });
+
+  if (expenses.length > 4) {
+    html += `<div class="chain-arrow">→</div><div class="chain-block" style="color:#6b7280"><div class="chain-block-hash">…</div><div class="chain-block-label">+${expenses.length-4} more</div></div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+// ─── Block Preview (live) ─────────────────────────────────
+function updateBlockPreview() {
+  const amt  = document.getElementById("inp-amount").value;
+  const cat  = document.getElementById("inp-category").value.replace(/^[^\s]+\s/,"");
+  const desc = document.getElementById("inp-desc").value.trim();
+  const now  = new Date().toLocaleString("en-IN");
+
+  document.getElementById("pv-amount").textContent  = amt  ? "₹"+formatAmt(amt) : "—";
+  document.getElementById("pv-cat").textContent     = cat  || "—";
+  document.getElementById("pv-desc").textContent    = desc || "—";
+  document.getElementById("pv-ts").textContent      = amt||desc ? now : "—";
+  document.getElementById("preview-hash").textContent = amt||desc ? "#"+randHex(8)+"…" : "#pending";
+}
+
+// ─── Tab Switching ────────────────────────────────────────
+function switchTab(name, btn) {
+  ["add","history","analytics"].forEach(t => {
+    document.getElementById("tab-"+t).style.display = t===name ? "block" : "none";
+  });
+  document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+
+  if (name==="analytics") renderAnalytics();
+}
+
+// ─── Loading State ────────────────────────────────────────
+function setLoading(v) {
+  loading = v;
+  const btn = document.getElementById("submit-btn");
+  btn.disabled = v;
+  btn.innerHTML = v
+    ? `<span class="spinner"></span>Broadcasting Transaction…`
+    : "⟠ Sign &amp; Submit to Blockchain";
+}
+
+// ─── Hero animated blocks ─────────────────────────────────
+function buildHeroBlocks() {
+  const labels = ["Genesis Block","Block #1","Block #2","Block #N"];
+  const container = document.getElementById("hero-blocks");
+  container.innerHTML = labels.map((b,i) => `
+    <div style="display:flex;align-items:center;gap:0">
+      <div class="hero-block" style="animation-delay:${i*.15}s">
+        <div class="hero-block-hash">0x${randHex(8)}</div>
+        <div class="hero-block-label">${b}</div>
+      </div>
+      ${i<3?'<div class="hero-block-arrow">→</div>':""}
+    </div>`).join("");
+}
+buildHeroBlocks();
+
+// ─── Utility ──────────────────────────────────────────────
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+</script>
+</body>
+</html>
